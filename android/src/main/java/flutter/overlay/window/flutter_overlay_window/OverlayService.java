@@ -82,6 +82,10 @@ public class OverlayService extends Service implements View.OnTouchListener {
     @Override
     public void onDestroy() {
         Log.d("OverLay", "Destroying the overlay window service");
+        if (overlayMessageChannel != null) {
+            overlayMessageChannel.setMessageHandler(null);
+            overlayMessageChannel = null;
+        }
         if (windowManager != null) {
             windowManager.removeView(flutterView);
             windowManager = null;
@@ -141,9 +145,6 @@ public class OverlayService extends Service implements View.OnTouchListener {
                 boolean enableDrag = call.argument("enableDrag");
                 resizeOverlay(width, height, enableDrag, result);
             }
-        });
-        overlayMessageChannel.setMessageHandler((message, reply) -> {
-            WindowSetup.messenger.send(message);
         });
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
 
@@ -320,6 +321,7 @@ public class OverlayService extends Service implements View.OnTouchListener {
         if (flutterEngine != null) {
             flutterChannel = new MethodChannel(flutterEngine.getDartExecutor(), OverlayConstants.OVERLAY_TAG);
             overlayMessageChannel = new BasicMessageChannel(flutterEngine.getDartExecutor(), OverlayConstants.MESSENGER_TAG, JSONMessageCodec.INSTANCE);
+            overlayMessageChannel.setMessageHandler(FlutterOverlayWindowPlugin::sendToMain);
         }
 
         createNotificationChannel();

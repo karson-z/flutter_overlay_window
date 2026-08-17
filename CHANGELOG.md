@@ -1,3 +1,7 @@
+## 0.5.1
+- Fix bidirectional messaging between the main app and overlay Flutter engines
+- Keep the main-engine message channel separate from the overlay service channel
+
 ## 0.5.0
 - Update gradle version
 - Fix `NullPointerException` in OverlayService

@@ -117,10 +117,10 @@ void overlayMain() {
  /// closes overlay if open
  await FlutterOverlayWindow.closeOverlay();
 
- /// broadcast data to and from overlay app
+ /// Send data from either the main app or the overlay app to the other side.
  await FlutterOverlayWindow.shareData("Hello from the other side");
 
- /// streams message shared between overlay and main app
+ /// Listen on both entry points to receive messages from the other side.
   FlutterOverlayWindow.overlayListener.listen((event) {
       log("Current Event: $event");
     });
