@@ -6,6 +6,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   const controlChannel = MethodChannel('x-slayer/overlay_channel');
+  const overlayChannel = MethodChannel('x-slayer/overlay');
   const messageChannel = BasicMessageChannel<dynamic>(
     'x-slayer/overlay_messenger',
     JSONMessageCodec(),
@@ -37,6 +38,7 @@ void main() {
 
   tearDown(() {
     messenger.setMockMethodCallHandler(controlChannel, null);
+    messenger.setMockMethodCallHandler(overlayChannel, null);
     messenger.setMockDecodedMessageHandler<dynamic>(messageChannel, null);
     messenger.setMockDecodedMessageHandler<dynamic>(mainToOverlayChannel, null);
     messenger.setMockDecodedMessageHandler<dynamic>(overlayToMainChannel, null);
@@ -54,6 +56,30 @@ void main() {
 
     test('requestPermission should return a boolean', () async {
       expect(await FlutterOverlayWindow.requestPermission(), isTrue);
+    });
+
+    test('resizeOverlay forwards size and top anchor to Android', () async {
+      MethodCall? receivedCall;
+      messenger.setMockMethodCallHandler(overlayChannel, (call) async {
+        receivedCall = call;
+        return true;
+      });
+
+      final resized = await FlutterOverlayWindow.resizeOverlay(
+        WindowSize.matchParent,
+        410,
+        true,
+        keepTop: true,
+      );
+
+      expect(resized, isTrue);
+      expect(receivedCall?.method, 'resizeOverlay');
+      expect(receivedCall?.arguments, {
+        'width': WindowSize.matchParent,
+        'height': 410,
+        'enableDrag': true,
+        'keepTop': true,
+      });
     });
 
     test('shareData sends a JSON message through the platform channel',

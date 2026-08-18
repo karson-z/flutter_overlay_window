@@ -140,8 +140,14 @@ void overlayMain() {
  /// update the overlay flag while the overlay in action
  await FlutterOverlayWindow.updateFlag(OverlayFlag.defaultFlag);
 
- /// Update the overlay size in the screen
- await FlutterOverlayWindow.resizeOverlay(80, 120);
+ /// Update the overlay size in the screen. Positive dimensions use dp.
+ /// keepTop keeps the current top edge fixed while the height changes.
+ await FlutterOverlayWindow.resizeOverlay(
+   80,
+   120,
+   true,
+   keepTop: true,
+ );
 
  /// Update the overlay position in the screen
  ///

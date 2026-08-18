@@ -148,7 +148,8 @@ public class OverlayService extends Service implements View.OnTouchListener {
                 int width = call.argument("width");
                 int height = call.argument("height");
                 boolean enableDrag = call.argument("enableDrag");
-                resizeOverlay(width, height, enableDrag, result);
+                boolean keepTop = Boolean.TRUE.equals(call.argument("keepTop"));
+                resizeOverlay(width, height, enableDrag, keepTop, result);
             }
         });
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
@@ -165,8 +166,8 @@ public class OverlayService extends Service implements View.OnTouchListener {
         int dx = startX == OverlayConstants.DEFAULT_XY ? 0 : startX;
         int dy = startY == OverlayConstants.DEFAULT_XY ? -statusBarHeightPx() : startY;
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
-                WindowSetup.width == -1999 ? -1 : WindowSetup.width,
-                WindowSetup.height != -1999 ? WindowSetup.height : screenHeight(),
+                overlayWidthInPixels(WindowSetup.width),
+                overlayHeightInPixels(WindowSetup.height),
                 0,
                 -statusBarHeightPx(),
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY : WindowManager.LayoutParams.TYPE_PHONE,
@@ -246,17 +247,47 @@ public class OverlayService extends Service implements View.OnTouchListener {
         }
     }
 
-    private void resizeOverlay(int width, int height, boolean enableDrag, MethodChannel.Result result) {
+    private void resizeOverlay(int width, int height, boolean enableDrag, boolean keepTop, MethodChannel.Result result) {
         if (windowManager != null) {
             WindowManager.LayoutParams params = (WindowManager.LayoutParams) flutterView.getLayoutParams();
-            params.width = (width == -1999 || width == -1) ? -1 : dpToPx(width);
-            params.height = (height != 1999 || height != -1) ? dpToPx(height) : height;
+            int nextHeight = overlayHeightInPixels(height);
+            if (keepTop && params.height > 0 && nextHeight > 0) {
+                int heightDelta = nextHeight - params.height;
+                int verticalGravity = params.gravity & Gravity.VERTICAL_GRAVITY_MASK;
+                if (verticalGravity == Gravity.CENTER_VERTICAL) {
+                    params.y += heightDelta / 2;
+                } else if (verticalGravity == Gravity.BOTTOM) {
+                    params.y -= heightDelta;
+                }
+            }
+            params.width = overlayWidthInPixels(width);
+            params.height = nextHeight;
+            WindowSetup.width = width;
+            WindowSetup.height = height;
             WindowSetup.enableDrag = enableDrag;
             windowManager.updateViewLayout(flutterView, params);
             result.success(true);
         } else {
             result.success(false);
         }
+    }
+
+    private int overlayWidthInPixels(int width) {
+        if (width == -1999 || width == WindowManager.LayoutParams.MATCH_PARENT) {
+            return WindowManager.LayoutParams.MATCH_PARENT;
+        }
+        return dpToPx(width);
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR1)
+    private int overlayHeightInPixels(int height) {
+        if (height == -1999) {
+            return screenHeight();
+        }
+        if (height == WindowManager.LayoutParams.MATCH_PARENT) {
+            return WindowManager.LayoutParams.MATCH_PARENT;
+        }
+        return dpToPx(height);
     }
 
     private void moveOverlay(int x, int y, MethodChannel.Result result) {
