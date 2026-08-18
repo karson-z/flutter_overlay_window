@@ -10,6 +10,14 @@ void main() {
     'x-slayer/overlay_messenger',
     JSONMessageCodec(),
   );
+  const mainToOverlayChannel = BasicMessageChannel<dynamic>(
+    'x-slayer/overlay_messenger/main_to_overlay',
+    JSONMessageCodec(),
+  );
+  const overlayToMainChannel = BasicMessageChannel<dynamic>(
+    'x-slayer/overlay_messenger/overlay_to_main',
+    JSONMessageCodec(),
+  );
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
 
@@ -30,6 +38,8 @@ void main() {
   tearDown(() {
     messenger.setMockMethodCallHandler(controlChannel, null);
     messenger.setMockDecodedMessageHandler<dynamic>(messageChannel, null);
+    messenger.setMockDecodedMessageHandler<dynamic>(mainToOverlayChannel, null);
+    messenger.setMockDecodedMessageHandler<dynamic>(overlayToMainChannel, null);
   });
 
   group('FlutterOverlayWindow', () {
@@ -82,6 +92,95 @@ void main() {
 
       expect(await received, message);
       expect(messageChannel.codec.decodeMessage(encodedReply), message);
+    });
+
+    test('sendToOverlay uses only the main-to-overlay channel', () async {
+      final message = <String, dynamic>{'action': 'sync'};
+      Object? receivedFromMain;
+      Object? receivedFromOverlay;
+      messenger.setMockDecodedMessageHandler<dynamic>(mainToOverlayChannel, (
+        incoming,
+      ) async {
+        receivedFromMain = incoming;
+        return incoming;
+      });
+      messenger.setMockDecodedMessageHandler<dynamic>(overlayToMainChannel, (
+        incoming,
+      ) async {
+        receivedFromOverlay = incoming;
+        return incoming;
+      });
+
+      final reply = await FlutterOverlayWindow.sendToOverlay(message);
+
+      expect(receivedFromMain, message);
+      expect(receivedFromOverlay, isNull);
+      expect(reply, message);
+    });
+
+    test('messagesFromMain receives only main-to-overlay messages', () async {
+      final expected = <String, dynamic>{'action': 'state'};
+      final ignored = <String, dynamic>{'action': 'command'};
+      final received = FlutterOverlayWindow.messagesFromMain.first;
+
+      await messenger.handlePlatformMessage(
+        overlayToMainChannel.name,
+        overlayToMainChannel.codec.encodeMessage(ignored),
+        null,
+      );
+      final encodedReply = await messenger.handlePlatformMessage(
+        mainToOverlayChannel.name,
+        mainToOverlayChannel.codec.encodeMessage(expected),
+        null,
+      );
+
+      expect(await received, expected);
+      expect(mainToOverlayChannel.codec.decodeMessage(encodedReply), expected);
+    });
+
+    test('sendToMain uses only the overlay-to-main channel', () async {
+      final message = <String, dynamic>{'action': 'play'};
+      Object? receivedFromMain;
+      Object? receivedFromOverlay;
+      messenger.setMockDecodedMessageHandler<dynamic>(mainToOverlayChannel, (
+        incoming,
+      ) async {
+        receivedFromMain = incoming;
+        return incoming;
+      });
+      messenger.setMockDecodedMessageHandler<dynamic>(overlayToMainChannel, (
+        incoming,
+      ) async {
+        receivedFromOverlay = incoming;
+        return incoming;
+      });
+
+      final reply = await FlutterOverlayWindow.sendToMain(message);
+
+      expect(receivedFromMain, isNull);
+      expect(receivedFromOverlay, message);
+      expect(reply, message);
+    });
+
+    test('messagesFromOverlay receives only overlay-to-main messages',
+        () async {
+      final expected = <String, dynamic>{'action': 'command'};
+      final ignored = <String, dynamic>{'action': 'state'};
+      final received = FlutterOverlayWindow.messagesFromOverlay.first;
+
+      await messenger.handlePlatformMessage(
+        mainToOverlayChannel.name,
+        mainToOverlayChannel.codec.encodeMessage(ignored),
+        null,
+      );
+      final encodedReply = await messenger.handlePlatformMessage(
+        overlayToMainChannel.name,
+        overlayToMainChannel.codec.encodeMessage(expected),
+        null,
+      );
+
+      expect(await received, expected);
+      expect(overlayToMainChannel.codec.decodeMessage(encodedReply), expected);
     });
   });
 }

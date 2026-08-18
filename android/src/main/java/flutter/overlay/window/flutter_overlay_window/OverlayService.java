@@ -59,7 +59,8 @@ public class OverlayService extends Service implements View.OnTouchListener {
     private WindowManager windowManager = null;
     private FlutterView flutterView;
     private MethodChannel flutterChannel;
-    private BasicMessageChannel<Object> overlayMessageChannel;
+    private BasicMessageChannel<Object> legacyMessageChannel;
+    private BasicMessageChannel<Object> overlayToMainMessageChannel;
     private int clickableFlag = WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN;
 
@@ -82,9 +83,13 @@ public class OverlayService extends Service implements View.OnTouchListener {
     @Override
     public void onDestroy() {
         Log.d("OverLay", "Destroying the overlay window service");
-        if (overlayMessageChannel != null) {
-            overlayMessageChannel.setMessageHandler(null);
-            overlayMessageChannel = null;
+        if (legacyMessageChannel != null) {
+            legacyMessageChannel.setMessageHandler(null);
+            legacyMessageChannel = null;
+        }
+        if (overlayToMainMessageChannel != null) {
+            overlayToMainMessageChannel.setMessageHandler(null);
+            overlayToMainMessageChannel = null;
         }
         if (windowManager != null) {
             windowManager.removeView(flutterView);
@@ -320,8 +325,12 @@ public class OverlayService extends Service implements View.OnTouchListener {
         // Create the MethodChannel with the properly initialized FlutterEngine
         if (flutterEngine != null) {
             flutterChannel = new MethodChannel(flutterEngine.getDartExecutor(), OverlayConstants.OVERLAY_TAG);
-            overlayMessageChannel = new BasicMessageChannel(flutterEngine.getDartExecutor(), OverlayConstants.MESSENGER_TAG, JSONMessageCodec.INSTANCE);
-            overlayMessageChannel.setMessageHandler(FlutterOverlayWindowPlugin::sendToMain);
+            legacyMessageChannel = new BasicMessageChannel<>(flutterEngine.getDartExecutor(),
+                    OverlayConstants.MESSENGER_TAG, JSONMessageCodec.INSTANCE);
+            legacyMessageChannel.setMessageHandler(FlutterOverlayWindowPlugin::sendLegacyMessageToMain);
+            overlayToMainMessageChannel = new BasicMessageChannel<>(flutterEngine.getDartExecutor(),
+                    OverlayConstants.OVERLAY_TO_MAIN_MESSENGER_TAG, JSONMessageCodec.INSTANCE);
+            overlayToMainMessageChannel.setMessageHandler(FlutterOverlayWindowPlugin::sendOverlayMessageToMain);
         }
 
         createNotificationChannel();

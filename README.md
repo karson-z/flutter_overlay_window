@@ -117,13 +117,21 @@ void overlayMain() {
  /// closes overlay if open
  await FlutterOverlayWindow.closeOverlay();
 
- /// Send data from either the main app or the overlay app to the other side.
- await FlutterOverlayWindow.shareData("Hello from the other side");
+ /// Main app -> overlay app.
+ await FlutterOverlayWindow.sendToOverlay("Hello overlay");
 
- /// Listen on both entry points to receive messages from the other side.
-  FlutterOverlayWindow.overlayListener.listen((event) {
-      log("Current Event: $event");
-    });
+ /// Overlay app -> main app.
+ await FlutterOverlayWindow.sendToMain("Hello main app");
+
+ /// Run this listener in the overlay app.
+ FlutterOverlayWindow.messagesFromMain.listen((event) {
+   log("Message from main app: $event");
+ });
+
+ /// Run this listener in the main app.
+ FlutterOverlayWindow.messagesFromOverlay.listen((event) {
+   log("Message from overlay app: $event");
+ });
 
  /// use [OverlayFlag.focusPointer] when you want to use fields that show keyboards
  await FlutterOverlayWindow.showOverlay(flag: OverlayFlag.focusPointer);

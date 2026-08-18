@@ -9,12 +9,26 @@ class FlutterOverlayWindow {
   FlutterOverlayWindow._();
 
   static final StreamController _controller = StreamController();
+  static final StreamController<dynamic> _messagesFromMainController =
+      StreamController<dynamic>.broadcast();
+  static final StreamController<dynamic> _messagesFromOverlayController =
+      StreamController<dynamic>.broadcast();
   static const MethodChannel _channel =
       MethodChannel("x-slayer/overlay_channel");
   static const MethodChannel _overlayChannel =
       MethodChannel("x-slayer/overlay");
   static const BasicMessageChannel _overlayMessageChannel =
       BasicMessageChannel("x-slayer/overlay_messenger", JSONMessageCodec());
+  static const BasicMessageChannel<dynamic> _mainToOverlayMessageChannel =
+      BasicMessageChannel<dynamic>(
+    "x-slayer/overlay_messenger/main_to_overlay",
+    JSONMessageCodec(),
+  );
+  static const BasicMessageChannel<dynamic> _overlayToMainMessageChannel =
+      BasicMessageChannel<dynamic>(
+    "x-slayer/overlay_messenger/overlay_to_main",
+    JSONMessageCodec(),
+  );
 
   /// Open overLay content
   ///
@@ -95,12 +109,46 @@ class FlutterOverlayWindow {
     return _res;
   }
 
-  /// Broadcast data to and from overlay app
+  /// Sends data from the main app to the overlay app.
+  static Future<dynamic> sendToOverlay(dynamic data) {
+    return _mainToOverlayMessageChannel.send(data);
+  }
+
+  /// Messages sent by the main app and received by the overlay app.
+  static Stream<dynamic> get messagesFromMain {
+    _mainToOverlayMessageChannel.setMessageHandler((message) async {
+      _messagesFromMainController.add(message);
+      return message;
+    });
+    return _messagesFromMainController.stream;
+  }
+
+  /// Sends data from the overlay app to the main app.
+  static Future<dynamic> sendToMain(dynamic data) {
+    return _overlayToMainMessageChannel.send(data);
+  }
+
+  /// Messages sent by the overlay app and received by the main app.
+  static Stream<dynamic> get messagesFromOverlay {
+    _overlayToMainMessageChannel.setMessageHandler((message) async {
+      _messagesFromOverlayController.add(message);
+      return message;
+    });
+    return _messagesFromOverlayController.stream;
+  }
+
+  /// Broadcast data to and from overlay app.
+  @Deprecated(
+    'Use sendToOverlay from the main app or sendToMain from the overlay app.',
+  )
   static Future shareData(dynamic data) async {
     return await _overlayMessageChannel.send(data);
   }
 
-  /// Streams message shared between overlay and main app
+  /// Streams messages shared between overlay and main app.
+  @Deprecated(
+    'Use messagesFromMain in the overlay app or messagesFromOverlay in the main app.',
+  )
   static Stream<dynamic> get overlayListener {
     _overlayMessageChannel.setMessageHandler((message) async {
       _controller.add(message);

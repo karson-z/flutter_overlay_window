@@ -38,12 +38,15 @@ public class FlutterOverlayWindowPlugin implements
         FlutterPlugin, ActivityAware, BasicMessageChannel.MessageHandler<Object>, MethodCallHandler,
         PluginRegistry.ActivityResultListener {
 
-    private static BasicMessageChannel<Object> mainMessenger;
+    private static BasicMessageChannel<Object> mainLegacyMessenger;
+    private static BasicMessageChannel<Object> mainMessagesFromOverlayChannel;
 
     private MethodChannel channel;
     private Context context;
     private Activity mActivity;
-    private BasicMessageChannel<Object> messenger;
+    private BasicMessageChannel<Object> legacyMessenger;
+    private BasicMessageChannel<Object> mainToOverlayMessenger;
+    private BasicMessageChannel<Object> overlayToMainMessenger;
     private Result pendingResult;
     final int REQUEST_CODE_FOR_OVERLAY_PERMISSION = 1248;
 
@@ -53,8 +56,12 @@ public class FlutterOverlayWindowPlugin implements
         channel = new MethodChannel(flutterPluginBinding.getBinaryMessenger(), OverlayConstants.CHANNEL_TAG);
         channel.setMethodCallHandler(this);
 
-        messenger = new BasicMessageChannel(flutterPluginBinding.getBinaryMessenger(), OverlayConstants.MESSENGER_TAG,
+        legacyMessenger = new BasicMessageChannel(flutterPluginBinding.getBinaryMessenger(), OverlayConstants.MESSENGER_TAG,
                 JSONMessageCodec.INSTANCE);
+        mainToOverlayMessenger = new BasicMessageChannel<>(flutterPluginBinding.getBinaryMessenger(),
+                OverlayConstants.MAIN_TO_OVERLAY_MESSENGER_TAG, JSONMessageCodec.INSTANCE);
+        overlayToMainMessenger = new BasicMessageChannel<>(flutterPluginBinding.getBinaryMessenger(),
+                OverlayConstants.OVERLAY_TO_MAIN_MESSENGER_TAG, JSONMessageCodec.INSTANCE);
     }
 
     @RequiresApi(api = Build.VERSION_CODES.N)
@@ -135,9 +142,13 @@ public class FlutterOverlayWindowPlugin implements
     @Override
     public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
         channel.setMethodCallHandler(null);
-        messenger.setMessageHandler(null);
-        if (mainMessenger == messenger) {
-            mainMessenger = null;
+        legacyMessenger.setMessageHandler(null);
+        mainToOverlayMessenger.setMessageHandler(null);
+        if (mainLegacyMessenger == legacyMessenger) {
+            mainLegacyMessenger = null;
+        }
+        if (mainMessagesFromOverlayChannel == overlayToMainMessenger) {
+            mainMessagesFromOverlayChannel = null;
         }
     }
 
@@ -145,8 +156,10 @@ public class FlutterOverlayWindowPlugin implements
     public void onAttachedToActivity(@NonNull ActivityPluginBinding binding) {
         mActivity = binding.getActivity();
         binding.addActivityResultListener(this);
-        mainMessenger = messenger;
-        mainMessenger.setMessageHandler(this);
+        mainLegacyMessenger = legacyMessenger;
+        mainLegacyMessenger.setMessageHandler(this);
+        mainMessagesFromOverlayChannel = overlayToMainMessenger;
+        mainToOverlayMessenger.setMessageHandler(this::sendMainMessageToOverlay);
         if (FlutterEngineCache.getInstance().get(OverlayConstants.CACHED_TAG) == null) {
             FlutterEngineGroup enn = new FlutterEngineGroup(context);
             DartExecutor.DartEntrypoint dEntry = new DartExecutor.DartEntrypoint(
@@ -174,6 +187,19 @@ public class FlutterOverlayWindowPlugin implements
 
     @Override
     public void onMessage(@Nullable Object message, @NonNull BasicMessageChannel.Reply<Object> reply) {
+        sendMessageToOverlay(OverlayConstants.MESSENGER_TAG, message, reply);
+    }
+
+    private void sendMainMessageToOverlay(
+            @Nullable Object message,
+            @NonNull BasicMessageChannel.Reply<Object> reply) {
+        sendMessageToOverlay(OverlayConstants.MAIN_TO_OVERLAY_MESSENGER_TAG, message, reply);
+    }
+
+    private void sendMessageToOverlay(
+            @NonNull String channelName,
+            @Nullable Object message,
+            @NonNull BasicMessageChannel.Reply<Object> reply) {
         FlutterEngine overlayEngine = FlutterEngineCache.getInstance().get(OverlayConstants.CACHED_TAG);
         if (overlayEngine == null) {
             reply.reply(null);
@@ -182,15 +208,27 @@ public class FlutterOverlayWindowPlugin implements
 
         BasicMessageChannel<Object> overlayMessageChannel = new BasicMessageChannel<>(
                 overlayEngine.getDartExecutor().getBinaryMessenger(),
-                OverlayConstants.MESSENGER_TAG,
+                channelName,
                 JSONMessageCodec.INSTANCE);
         overlayMessageChannel.send(message, reply);
     }
 
-    static void sendToMain(
+    static void sendLegacyMessageToMain(
             @Nullable Object message,
             @NonNull BasicMessageChannel.Reply<Object> reply) {
-        BasicMessageChannel<Object> target = mainMessenger;
+        sendMessageToMain(mainLegacyMessenger, message, reply);
+    }
+
+    static void sendOverlayMessageToMain(
+            @Nullable Object message,
+            @NonNull BasicMessageChannel.Reply<Object> reply) {
+        sendMessageToMain(mainMessagesFromOverlayChannel, message, reply);
+    }
+
+    private static void sendMessageToMain(
+            @Nullable BasicMessageChannel<Object> target,
+            @Nullable Object message,
+            @NonNull BasicMessageChannel.Reply<Object> reply) {
         if (target == null) {
             reply.reply(null);
             return;
